@@ -1,0 +1,5 @@
+*.asc
+.vscode/
+node_modules/
+*.decrypted.*
+*.encrypted.*
