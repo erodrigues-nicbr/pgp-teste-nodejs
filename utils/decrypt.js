@@ -1,9 +1,14 @@
 import * as openpgp from "openpgp";
 import * as fs from "fs/promises";
 
-export async function decryptPDF(encryptedPdfPath, privateKeyPath) {
+export async function decryptPDF(
+  encryptedPdfPath,
+  privateKeyPath,
+  decryptedPdfPath = undefined
+) {
   try {
-    const encryptedMessage = await fs.readFile(encryptedPdfPath, "utf8");
+    // Ler arquivo binário (ao invés de utf8)
+    const encryptedMessage = await fs.readFile(encryptedPdfPath);
     const privateKeyArmored = await fs.readFile(privateKeyPath, "utf8");
 
     let privateKey = await openpgp.readPrivateKey({
@@ -18,9 +23,21 @@ export async function decryptPDF(encryptedPdfPath, privateKeyPath) {
       });
     }
 
-    const message = await openpgp.readMessage({
-      armoredMessage: encryptedMessage,
-    });
+    // Verifica se a mensagem está no formato armado ou binário
+    let message;
+    if (
+      encryptedMessage
+        .toString("utf8")
+        .startsWith("-----BEGIN PGP MESSAGE-----")
+    ) {
+      message = await openpgp.readMessage({
+        armoredMessage: encryptedMessage.toString("utf8"), // Converte para string se estiver em formato armored
+      });
+    } else {
+      message = await openpgp.readMessage({
+        binaryMessage: encryptedMessage, // Caso contrário, trata como binário
+      });
+    }
 
     const { data: decryptedPdfData } = await openpgp.decrypt({
       message,
@@ -28,10 +45,9 @@ export async function decryptPDF(encryptedPdfPath, privateKeyPath) {
       format: "binary", // Indica que estamos trabalhando com dados binários
     });
 
-    const decryptedPdfPath = encryptedPdfPath.replace(
-      ".encrypted.asc",
-      ".decrypted.pdf"
-    );
+    decryptedPdfPath =
+      decryptedPdfPath ??
+      encryptedPdfPath.replace(".encrypted.asc", ".decrypted.pdf");
     await fs.writeFile(decryptedPdfPath, decryptedPdfData, "binary"); // Salva o PDF como binário
     console.log(`PDF descriptografado salvo como: ${decryptedPdfPath}`);
     return decryptedPdfPath;
